@@ -6,7 +6,7 @@ It does not move real money, connect to banks or payment networks, or handle car
 
 > Every change to money is an immutable, balanced, append-only ledger transaction. Nothing else may change a balance.
 
-The full specification is in [SPEC.md](SPEC.md). How it works is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the complete endpoint reference in [docs/API.md](docs/API.md), and every decision with its alternatives in [docs/adr](docs/adr).
+How it works is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), the complete endpoint reference in [docs/API.md](docs/API.md), and every decision with its alternatives in [docs/adr](docs/adr).
 
 ## Status
 
@@ -308,7 +308,7 @@ Deposits do not scale: every deposit locks the same WORLD row, so more clients o
 | PostgreSQL restarted during a 10-minute load run (20 VUs) | about 1,400 requests answered `503 SERVICE_BUSY` during the 2-second outage, no `500`; `/readyz` went 503 and back to 200 by itself; the API was never restarted; reconciliation OK over 819,783 transactions | `Restart-Service postgresql-x64-18` by hand, k6 counters, API log |
 | Every local TCP connection aborted by Windows mid-run (unplanned, same run) | PostgreSQL did not notice and kept 5 orphaned transactions holding account locks; requests touching those accounts got `503` after `DB_LOCK_TIMEOUT` until the run ended. Fixed: the server now ends a transaction idle longer than `REQUEST_TIMEOUT` and releases its locks | `pg_stat_activity` during the run; `TestPoolIdleInTransactionTimeoutReleasesLocks`; [ADR 0012](docs/adr/0012-idle-in-transaction-timeout.md) |
 
-## MVP checklist (SPEC 24)
+## MVP checklist
 
 - [x] With Go and a native PostgreSQL, the README steps start the API on a clean machine (verified on Windows without WSL).
 - [x] Accounts can be created, read, suspended, reactivated and closed (only with zero balance).
@@ -316,11 +316,11 @@ Deposits do not scale: every deposit locks the same WORLD row, so more clients o
 - [x] Transfers work and reject every invalid case with the documented code.
 - [x] Invariants I1 to I10 each have passing tests, including database-level tests.
 - [x] Concurrency tests C1 to C6 pass repeatedly under `-race`.
-- [x] Duplicate and conflicting idempotent requests behave per the spec, including concurrently.
+- [x] Duplicate and conflicting idempotent requests behave as documented in [docs/API.md](docs/API.md), including concurrently.
 - [x] Failed operations leave no ledger state and free the idempotency key.
 - [x] History is paginated, newest first, stable under concurrent writes.
 - [x] Reconciliation reports OK on valid data and detects each injected inconsistency.
-- [ ] CI runs lint, unit and integration tests on every push: the workflow is written and validated with `actionlint`, but has not run yet (the repository has not been pushed).
+- [x] CI runs lint, unit and integration tests on every push, on PostgreSQL 16 and 18.
 - [x] README, ARCHITECTURE, API and ADRs complete, load-test numbers published.
 
 ## Commands
@@ -400,5 +400,5 @@ GitHub Actions on every push and pull request ([.github/workflows/ci.yml](.githu
 ## Known limitations
 
 - **No end-user authentication in the MVP.** Anyone who knows an account ID can read it and transfer from it, and anyone who knows a transaction ID can read it. This is a deliberate scope cut; administrative endpoints require a bearer token.
-- Account creation is not idempotent: a retried request creates a second account. It moves no money, so this is accepted (spec 11.1).
+- Account creation is not idempotent: a retried request creates a second account. It moves no money, so this is accepted.
 - BRL is the only seeded currency. The schema supports more.
