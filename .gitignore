@@ -1,0 +1,24 @@
+# Configuração local (copiada do .env.example)
+.env
+
+# Saída de build
+/bin/
+*.exe
+*.test
+
+# Artefatos de teste e cobertura
+*.out
+coverage.*
+
+# Resultados brutos do teste de carga (os números publicados ficam no README)
+tests/load/results/*.json
+
+# Editores e SO
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+*.md
+!README.md

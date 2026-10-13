@@ -1,0 +1,96 @@
+# CI do CoreLedger (SPEC 21.6). Sem containers: o PostgreSQL é instalado
+# nativamente no runner, a partir do repositório oficial PGDG.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Versões fixadas (SPEC 15.1). Mudar aqui exige mudar no README também.
+  SQLC_VERSION: "1.31.1"
+  SQLC_SHA256: "497ae4fcdfa64c5b0c311ffe4c2bd991e43991e82e5367792ed78bc2dca27354"
+  GOLANGCI_LINT_VERSION: "v2.14.0"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: go vet
+        run: go vet ./...
+
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ env.GOLANGCI_LINT_VERSION }}
+
+      - name: Install sqlc
+        run: |
+          curl -sSfL -o /tmp/sqlc.tar.gz \
+            "https://github.com/sqlc-dev/sqlc/releases/download/v${SQLC_VERSION}/sqlc_${SQLC_VERSION}_linux_amd64.tar.gz"
+          echo "${SQLC_SHA256}  /tmp/sqlc.tar.gz" | sha256sum --check
+          mkdir -p "$HOME/bin"
+          tar -xzf /tmp/sqlc.tar.gz -C "$HOME/bin" sqlc
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: sqlc diff (código gerado atualizado)
+        run: sqlc diff
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 16 é o mínimo prometido pelo spec; 18 é a versão de desenvolvimento.
+        postgres: ["16", "18"]
+    env:
+      CI: "true"
+      # O race detector precisa de cgo; no Linux o gcc já vem no runner.
+      CGO_ENABLED: "1"
+      TEST_DATABASE_URL: postgres://ledger_test:ledger_test@localhost:5432/postgres?sslmode=disable
+      MIGRATE_DATABASE_URL: postgres://ledger_owner:ledger_owner@localhost:5432/ledger_dev?sslmode=disable
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install PostgreSQL ${{ matrix.postgres }}
+        env:
+          PG_MAJOR: ${{ matrix.postgres }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y "postgresql-${PG_MAJOR}"
+          # A imagem do runner pode trazer outro major ocupando a porta 5432.
+          # Remove todos os clusters e cria um só, da versão da matrix, na 5432.
+          sudo pg_lsclusters -h | while read -r ver name _; do
+            sudo pg_dropcluster --stop "$ver" "$name"
+          done
+          sudo pg_createcluster -p 5432 --start "$PG_MAJOR" main
+          pg_lsclusters
+
+      - name: Database setup
+        # Via stdin: o usuário postgres pode não ter acesso de leitura à
+        # pasta do workspace.
+        run: sudo -u postgres psql -v ON_ERROR_STOP=1 < scripts/db-setup.sql
+
+      - name: Tests (race detector)
+        run: go test -race -count=1 ./...
+
+      - name: Smoke - migrate and build
+        run: |
+          go run ./cmd/ledger migrate up
+          go run ./cmd/ledger migrate version
+          go build ./...

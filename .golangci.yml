@@ -1,0 +1,40 @@
+version: "2"
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    # misspell fica de fora: ele só conhece inglês, e os comentários do
+    # projeto são em português.
+    - noctx
+    - rowserrcheck
+    - sqlclosecheck
+    - unconvert
+  settings:
+    gosec:
+      excludes:
+        # SQL dinâmico só aparece com identificadores escapados por
+        # pgx.Identifier (CREATE/DROP DATABASE no helper de teste); valores
+        # são sempre passados como parâmetros.
+        - G201
+        - G202
+  exclusions:
+    generated: strict
+    presets:
+      - std-error-handling
+    rules:
+      # Os testes usam credenciais descartáveis em connection strings de propósito.
+      - path: _test\.go
+        linters: [gosec]
+        text: G101
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/brianashihara/coreledger

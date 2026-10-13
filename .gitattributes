@@ -1,0 +1,3 @@
+# Sempre LF no repositório e na cópia de trabalho, em qualquer SO (SPEC 15.3).
+# O hash das migrations (template de teste) e o `sqlc diff` dependem dos bytes exatos.
+* text=auto eol=lf
